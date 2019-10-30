@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import pprint
+import re
+import shutil
+import sys
+import tempfile
+import uuid
+import base64
+
+import asperathos
+import cas
+import swift
+
+from gcm_cipher import encrypt
+
+def required_env(var_name, msg):
+    if var_name not in os.environ:
+        print(msg)
+        exit(1) 
+
+
+def parse_args():
+    """Parse application arguments
+
+    @rtype: Namespace
+    @returns: populated namespace with arguments
+    """
+    curr_path = os.path.dirname(os.path.abspath(__file__))
+    config_filename = "config.json"
+    config_default = os.path.join(curr_path, config_filename)
+    certificate_default = os.path.join(curr_path, "client.pem")
+
+    parser = argparse.ArgumentParser(
+        description='Submit data for batch processing using Asperathos'
+    )
+
+    asperathos_submission = parser.add_mutually_exclusive_group(required=True)
+    sgx_configuration = parser.add_mutually_exclusive_group(required=True)
+
+    parser.add_argument('data_path', metavar='data-path',
+                        action='store', help='Set the data path')
+    parser.add_argument('--config', action='store', default=config_default,
+                        help='Set the configuration file (default: %s)' % config_filename)
+    parser.add_argument('--cert', action='store', default=certificate_default,
+                        help='CAS API authentication certificate (default: client.pem)')
+    parser.add_argument('--expected-time', dest='expected_time', action='store', default=200, type=int,
+                        help='Expected time (in secs) to finish the job (default: 200s)')
+    parser.add_argument('--item-lease-secs', dest='item_lease_secs', action='store', default=15, type=int,
+                        help='Expected time (in secs) to process an item (default: 15s)')
+    parser.add_argument('--verbosity', dest='verbosity', action='store', default=0,
+                        help='Set verbosity level of SCONE (default: 0)')
+
+    sgx_configuration.add_argument('--cas-address', dest='cas_address', action='store',
+                        help='Set the SCONE CAS address [host:REST port:attestation port] (ex: 10.30.1.24:8081:18765)')
+    sgx_configuration.add_argument('--sgx-simulation', action='store_true', dest='sgx_simulated', default=False,
+                        help='Run using SGX simulation environment (default: False)')
+
+    asperathos_submission.add_argument('--generate-json-only', dest='output_json', action='store', default=None,
+                        help='Create an Asperathos job JSON file (do not submit)')
+    asperathos_submission.add_argument('--submissions-url', dest='submissions_url', action='store',
+                        help='Asperathos submissions API URL (ex: http://10.11.16.34:1500/submissions)')
+
+    args = parser.parse_args()
+
+    if not args.sgx_simulated and not cas.check_cas_address(args.cas_address):
+        print("[ERROR] Invalid SCONE CAS address! Exiting...")
+        exit(1)
+
+    return args
+
+
+def gcm_encrypt(key, data):
+    iv, ciphertext, tag = encrypt(key, data, None)
+    
+    return iv + tag + ciphertext
+
+
+def create_workload_line(config_id, data_url, segment_id):
+    return ";".join([config_id, data_url, segment_id])
+
+
+def print_info(text):
+    print("[INFO] %s" % str(text))
+
+
+def load_config(configuration_file):
+    return json.load(open(configuration_file, 'r'))
+
+
+def main():
+    # check for the OpenStack required environment variables
+    required_envs = ["OS_AUTH_URL", "OS_AUTH_TOKEN", "OS_PROJECT_NAME", "OS_PROJECT_DOMAIN_ID"]
+    for env in required_envs:
+        required_env(env, "[ERROR] '%s' environment variable is not set! TIP: try sourcing the tokenrc.sh file." % env)
+
+    args = parse_args()
+
+    # check if args.config & args.cert exists
+    if not os.path.exists(args.config):
+        print("[ERROR] '%s' configuration file not exists! Exiting..." % args.config)
+        exit(1)
+    if not args.sgx_simulated and not os.path.exists(args.cert):
+        print("[ERROR] '%s' CAS certificate file not exists!\n[ERROR] Try ./generate_certificate.sh to generate one." % args.cert)
+        exit(1)
+
+    if not os.path.exists(args.data_path):
+        print("[ERROR] The path '%s' not exists! Exiting..." % args.data_path, file=sys.stderr)
+        exit(1)
+
+    configs = load_config(args.config)
+
+    if not args.sgx_simulated:
+        print_info("Checking the CAS status...")
+        cas.check_cas_status(args.cas_address, args.cert)
+
+    # Generate a random 128-bit KEY.
+    print_info("Generating AES128-GCM KEY...")
+    aes_key = os.urandom(16)
+    aes_key_b64 = base64.b64encode(aes_key).decode('utf-8')
+    print_info("KEY = %s" % aes_key_b64)
+
+    # create a new container with random UUID
+    data_id = str(uuid.uuid4())
+    print()
+    print_info("Creating container on Swift named '%s'\n" % data_id)
+    swift.create_public_container(data_id)
+
+    application_name = "radiomics"
+    workload_file = tempfile.TemporaryFile()
+    
+    # Encrypt and push to swift
+    for r, _, f in os.walk(args.data_path):
+        for file_name in f:
+            if '.mp4' in file_name.lower():
+                file_obj = open(os.path.realpath(os.path.join(r, file_name)), 'rb')
+                encrypted_data = gcm_encrypt(aes_key, file_obj.read())
+                encrypted_fname = "%s.mp4" % (str(uuid.uuid4()).replace("-", ""))
+                print_info("Encrypting and publishing '%s' (as '%s') on Swift\n" % (file_name, encrypted_fname))
+                
+                video_url = swift.put_object(data_id, encrypted_fname, encrypted_data)
+                
+                workload_file.write(bytes(video_url + '\n', 'utf-8'))
+
+    workload_file.flush()
+    workload_file.seek(0)
+
+    workload_url = swift.put_object(data_id, "workload.txt", workload_file)
+    print_info("Workload URL: %s" % workload_url)
+    workload_file.close()
+
+
+    if not args.sgx_simulated:
+        print_info("Publishing Palaemon session")
+        
+        cas.post_session(
+            args.cas_address, args.cert, data_id, application_name,
+            configs['image-name'], configs['mrenclave'], configs['fspf-tag'],
+            configs['fspf-key'], configs['fspf-path'], aes_key_b64, args.item_lease_secs)
+
+    print()
+
+    # asperathos configuration
+    asperathos_config = asperathos.get_template()
+    
+    # set grafana password
+    asperathos_config['plugin_info']['password'] = "radiomics123"
+    if not args.sgx_simulated:
+        asperathos_config['plugin_info']['cmd'] = ["bash", "-c", "/export_env.sh; python2.7"]
+    else:
+        asperathos_config['plugin_info']['cmd'] = ["python2.7", "-B", "anonymise.py", "-o", "/mnt/output/images"]
+    asperathos_config['plugin_info']['img'] = configs['image-name']
+    asperathos_config['plugin_info']['redis_workload'] = workload_url
+    if not args.sgx_simulated:
+        asperathos_config['plugin_info']['env_vars'] = {
+            'SCONE_CONFIG_ID': cas.get_config_id(data_id, application_name),
+            'SCONE_CAS_ADDR': cas.get_attestation_address(args.cas_address),
+            'SCONE_LAS_ADDR': "172.17.0.1:18766",
+            'SCONE_ALPINE': "1",
+            'SCONE_VERSION': "1",
+            'SCONE_MODE': "HW",
+            'SCONE_LOG': str(args.verbosity),
+            'SCONE_HEAP': "3G",
+            'SCONE_STACK': "5M",
+            'SCONE_ALLOW_DLOPEN': "1"
+        }
+    else:
+        asperathos_config['plugin_info']['env_vars'] = {
+            'SCONE_FSPF': configs['fspf-path'],
+            'SCONE_FSPF_KEY': configs['fspf-key'],
+            'SCONE_FSPF_TAG': configs['fspf-key'],
+            'ENCRYPTION_KEY': aes_key_b64,
+            'SCONE_ALPINE': "1",
+            'SCONE_VERSION': "1",
+            'SCONE_MODE': "SIM",
+            'SCONE_LOG': str(args.verbosity),
+            'SCONE_HEAP': "3G",
+            'SCONE_STACK': "5M",
+            'SCONE_ALLOW_DLOPEN': "1",
+            'ITEM_LEASE_SECS': str(args.item_lease_secs),
+            'OS_AUTH_URL': os.environ["OS_AUTH_URL"],
+            'OS_AUTH_TOKEN': os.environ["OS_AUTH_TOKEN"],
+            'OS_PROJECT_NAME': os.environ["OS_PROJECT_NAME"],
+            'OS_PROJECT_DOMAIN_ID': os.environ["OS_PROJECT_DOMAIN_ID"],
+        }
+
+    asperathos_config['plugin_info']['monitor_info']['expected_time'] = args.expected_time
+
+    if args.output_json is not None:
+        json_file = open(args.output_json, 'w')
+        json_file.write(json.dumps(asperathos_config, sort_keys=True,
+                        indent=4, separators=(',', ': ')))
+        json_file.close()
+        print_info("'%s' generated successfully." % args.output_json)
+    else:
+        job_status_code, job_response = asperathos.submit_job(asperathos_config, args.submissions_url)
+
+        if job_status_code == 202:
+            job_id = json.loads(job_response)['job_id']
+            print_info("Job ID: %s - Job URL: %s" % (job_id, "%s/%s" % (args.submissions_url, job_id)))
+            #print(asperathos.get_job_info(job_id, args.submissions_url))
+
+        else:
+            print("[ERROR] Job not accepted :(")
+            print(job_response)
+
+if __name__ == "__main__":
+    main()

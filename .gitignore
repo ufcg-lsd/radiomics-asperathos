@@ -1,0 +1,10 @@
+/__pycache__/
+/.venv/
+/.vscode/
+/*-openrc.sh
+/*-tokenrc.sh
+/client-key.key
+/client.crt
+/client.pem
+/.radiomics-app/
+/.virtual-env/

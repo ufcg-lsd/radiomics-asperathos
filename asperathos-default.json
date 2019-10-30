@@ -1,0 +1,53 @@
+{
+    "plugin": "kubejobs",
+    "plugin_info": {
+        "username": "admin",
+        "password": "",
+        "cmd": [],
+        "img": "",
+        "init_size": 1,
+        "redis_workload": "",
+        "job_resources_lifetime": 30,
+        "k8s_resources_control": {
+            "limits": {
+                "memory": "4Gi",
+                "cpu": "2000m"
+                
+            },
+            "requests": {
+                "memory": "3Gi",
+                "cpu": "1000m"
+            }
+        },
+        "control_plugin": "kubejobs",
+        "control_parameters": {
+            "schedule_strategy": "default",
+            "actuator": "k8s_replicas",
+            "check_interval": 1,
+            "trigger_down": 0,
+            "trigger_up": 0,
+            "min_rep": 1,
+            "max_rep": 2,
+            "actuation_size": 1,
+            "metric_source": "redis",
+            "heuristic_options": {
+                "proportional_gain": 0.1,
+                "derivative_gain": 0,
+                "integral_gain": 0
+            }
+        },
+        "monitor_plugin": "kubejobs",
+        "monitor_info": {
+            "expected_time": 180
+        },
+        "enable_visualizer": true,
+        "visualizer_plugin": "k8s-grafana",
+        "visualizer_info": {
+            "datasource_type": "influxdb"
+        },
+        "env_vars": {}
+    },
+ 
+    "enable_auth": false
+}
+
