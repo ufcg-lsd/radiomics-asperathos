@@ -197,7 +197,7 @@ $ curl http://localhost:1500/submissions/kj-3898be2
 {"redis_port": 30150, "starting_time": "Job is not running yet!", "redis_ip": "10.11.16.84", "status": "created", "visualizer_url": "http://10.11.16.84:30735", "app_id": "kj-3898be2"}
 ```
 
-You can see a live chart of the progress of your job accessing URL from the "visualizer_url" field, in this case we have "http://10.11.16.84:30735". The default credentias (username and password) to access the visualizer is:
+You can see a live chart of the progress of your job accessing URL from the "visualizer_url" field, in this case we have "http://\<Cluster IP\>:30735". The default credentias (username and password) to access the visualizer is:
 ```
 username: admin
 password: radiomics123
