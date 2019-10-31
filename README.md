@@ -150,10 +150,10 @@ optional arguments:
                         Create an Asperathos job JSON file (do not submit)
   --submissions-url SUBMISSIONS_URL
                         Asperathos submissions API URL (ex:
-                        http://10.11.16.34:1500/submissions)
+                        http://localhost:1500/submissions)
 ```
 
-Now, we are going to submit videos from path './sample-videos' and Asperathos submissions API listening on 'http://10.11.16.34:1500/submissions', with a deadline of 200s in SGX simulation mode:
+Now, we are going to submit videos from path './sample-videos' and Asperathos submissions API listening on 'http://localhost:1500/submissions', with a deadline of 200s in SGX simulation mode:
 
 Note: remember to change the Asperathos submissions API URL to a proper one.
 
@@ -184,7 +184,7 @@ $ ./submit-job ./sample-videos --sgx-simulation --generate-json-only my-job.json
 The 'my-job.json' contains the Asperathos job JSON which includes workload list URL, plugin configurations, visualizer credentials, etc. To submit the job, run:
 
 ```bash
-$ curl -H "Content-Type: application/json" -X POST -d @my-job.json http://10.11.16.34:1500/submissions
+$ curl -H "Content-Type: application/json" -X POST -d @my-job.json http://localhost:1500/submissions
 
 {"job_id": "kj-3898be2"}
 ```
@@ -192,7 +192,7 @@ $ curl -H "Content-Type: application/json" -X POST -d @my-job.json http://10.11.
 With the Job ID in hands, you could do a request to [submissions URL]/[job id] and check the progress of the job. For this instance:
 
 ```
-$ curl http://10.11.16.34:1500/submissions/kj-3898be2
+$ curl http://localhost:1500/submissions/kj-3898be2
 
 {"redis_port": 30150, "starting_time": "Job is not running yet!", "redis_ip": "10.11.16.84", "status": "created", "visualizer_url": "http://10.11.16.84:30735", "app_id": "kj-3898be2"}
 ```
@@ -206,7 +206,7 @@ password: radiomics123
 To use SGX hardware mode, just replace "--sgx-simulation" to "--cas-adress CAS-ADDRESS". For the instance:
 
 ```bash
-$ ./submit-job ./sample-videos --cas-address scone.lsd.ufcg.edu.br:8081:18765 --submissions-url http://10.11.16.34:1500/submissions
+$ ./submit-job ./sample-videos --cas-address scone.lsd.ufcg.edu.br:8081:18765 --submissions-url http://localhost:1500/submissions
 ```
 
-This command will issue a job to Asperathos that listens on 10.11.16.34:1500 and will provide secrets to a Palaemon instance listening on 'scone.lsd.ufcg.edu.br'.
+This command will issue a job to Asperathos that listens on localhost:1500 and will provide secrets to a Palaemon instance listening on 'scone.lsd.ufcg.edu.br'.
