@@ -210,3 +210,18 @@ $ ./submit-job ./sample-videos --cas-address scone.lsd.ufcg.edu.br:8081:18765 --
 ```
 
 This command will issue a job to Asperathos that listens on localhost:1500 and will provide secrets to a Palaemon instance listening on 'scone.lsd.ufcg.edu.br'.
+
+To get the application processing results, use the Swift client:
+
+```
+# To list the object containers
+$ swift list
+
+# To list the content of a container
+$ swift list <container name>
+
+# To download an object
+$ swift download <container name> <object name>
+```
+
+The processing result appears in the format '\<job-id\>-results'.
