@@ -1,7 +1,7 @@
 {
 	"mrenclave": "5a30153e87e3067912b92f5126731136f3b3b84550dde5645887db356e0ae63d",
-	"image-name": "lsd-registry.duckdns.org:5000/issre2019/radiomics-asperathos:latest",
-	"fspf-tag": "d2bd156761ba32ede882b44228015e12",
-	"fspf-key": "4b242a13d64ba02eaa53f903b3a9d30225227a05e96580ff82389a00b1ab8e1f",
+	"image-name": "sconecuratedimages/issre2019:radiomics-asperathos",
+	"fspf-tag": "f377fec400751169574e22dcbeb37fc5",
+	"fspf-key": "764ef6f2d67a16e4cd49258680df41c8371f51a180af7214399dc3bd5c570f13",
 	"fspf-path": "/fspf.pb"
 }
