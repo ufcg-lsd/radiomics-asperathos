@@ -1,0 +1,9 @@
+FROM python:3.6.9-buster
+
+WORKDIR /app
+
+ADD . /app
+
+RUN /bin/bash -c "pip install -r requirements.txt && ./generate_certificate.sh"
+
+CMD ["/bin/bash", "-c", "./submit-job --cas-address=$PALAEMON_SESSIONS_ADDRESS --generate-json-only /tmp/test.json /dataset | tee submit-job-output && cat submit-job-output | grep \"Workload URL\" | cut -d' ' -f4 | sed 's/.*/ workload_url: & /'"]

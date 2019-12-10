@@ -15,7 +15,7 @@ This application focuses on the implementation of the pilot application on Medic
 * Python v3.5.2
 * pip v12.2.3
 * Python libraries (use of virtualenv is recommended): 
-  * cryptography==2.7
+  * cryptography==2.8
   * python-keystoneclient==3.21.0
   * python-openstackclient==4.0.0
   * python-swiftclient==3.8.1
